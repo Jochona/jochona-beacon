@@ -1,0 +1,50 @@
+Jochona Beacon
+Copyright the Jochona project contributors.
+
+Licensed under the terms of either the MIT license (see LICENSE-MIT) or
+the Apache License, Version 2.0 (see LICENSE-APACHE), at your option.
+
+================================================================================
+Third-party notices
+================================================================================
+
+This binary statically links, vendors, or otherwise incorporates the
+following third-party components, whose own license terms continue to
+apply to the portions they contribute.
+
+--------------------------------------------------------------------------------
+SQLite (vendored via `rusqlite`'s `bundled` build feature)
+--------------------------------------------------------------------------------
+SQLite is in the public domain. No license notice is required, but the
+authors' own disclaimer is reproduced here for completeness:
+
+    The author disclaims copyright to this source code. In place of a
+    legal notice, here is a blessing:
+        May you do good and not evil.
+        May you find forgiveness for yourself and forgive others.
+        May you share freely, never taking more than you give.
+
+--------------------------------------------------------------------------------
+ring (via `rustls`'s `ring` crypto provider)
+--------------------------------------------------------------------------------
+ring is used for the cryptographic primitives underlying Beacon's TLS
+implementation. ring is distributed under an ISC-style license with
+additional notices for code derived from BoringSSL/OpenSSL; see
+https://github.com/briansmith/ring/blob/main/LICENSE for the full text.
+
+--------------------------------------------------------------------------------
+Every other dependency
+--------------------------------------------------------------------------------
+The complete, exact set of compiled-in dependencies and their versions is
+pinned in `Cargo.lock` at build time. The overwhelming majority are
+MIT/Apache-2.0 dual-licensed, matching this project's own license — the
+same terms Rust's own ecosystem defaults to. To regenerate a full,
+per-dependency license inventory for a specific build:
+
+    cargo install cargo-about
+    cargo about generate about.hbs > THIRD-PARTY-LICENSES.html
+
+This NOTICE file is maintained by hand for the handful of components
+above whose licensing isn't the ecosystem-standard MIT/Apache-2.0 dual
+license; it is not a substitute for running the command above before a
+release if a fully itemized report is required.

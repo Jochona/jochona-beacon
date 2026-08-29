@@ -1,0 +1,73 @@
+# Jochona Beacon systemd unit.
+#
+# Install:
+#   install -D -m 0644 packaging/systemd/jochona-beacon.service /etc/systemd/system/jochona-beacon.service
+#   install -d -o jochona-beacon -g jochona-beacon -m 0750 /var/lib/jochona-beacon
+#
+# The master key delivered via LoadCredential must exist, be exactly 32
+# raw bytes, and be root-owned/mode 0600 on disk — systemd itself reads it
+# as root at unit start and re-exposes it to this unit's unprivileged user
+# only through a private, non-swappable tmpfs (see src/crypto/master_key.rs).
+# Generate it once with:
+#   install -d -m 0700 /etc/jochona-beacon
+#   head -c 32 /dev/urandom > /etc/jochona-beacon/master-key
+#   chmod 0600 /etc/jochona-beacon/master-key
+#
+# If /etc/jochona-beacon/master-key does not exist, Beacon falls back to a
+# self-generated, self-owned 0600 key file inside its data directory
+# instead (see MasterKey::load) — convenient for a tarball/dev install,
+# but the systemd credential path above is the hardened one: the key
+# never touches a writable-by-the-service-user directory at all.
+
+[Unit]
+Description=Jochona Beacon (LAN pairing + Wake-on-LAN daemon)
+Documentation=https://github.com/Jochona/jochona-beacon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/jochona-beacon
+Restart=on-failure
+RestartSec=5s
+
+# Master key delivery (see header comment above).
+LoadCredential=master-key:/etc/jochona-beacon/master-key
+
+# Runtime identity.
+User=jochona-beacon
+Group=jochona-beacon
+Environment=JOCHONA_BEACON_DATA_DIR=/var/lib/jochona-beacon
+Environment=JOCHONA_BEACON_LOG_FORMAT=json
+StateDirectory=jochona-beacon
+StateDirectoryMode=0750
+
+# Wake-on-LAN needs a raw broadcast UDP socket (SO_BROADCAST) and mDNS
+# needs multicast; neither needs full root, both are covered by these two
+# capabilities alone.
+AmbientCapabilities=CAP_NET_BROADCAST CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_BROADCAST CAP_NET_RAW
+NoNewPrivileges=true
+
+# Sandboxing. Beacon is LAN-only by design (contract: mTLS API bound to
+# the LAN interface, admin UI bound to loopback) and touches nothing
+# outside its state directory and the systemd credential above.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+ReadWritePaths=/var/lib/jochona-beacon
+
+[Install]
+WantedBy=multi-user.target
