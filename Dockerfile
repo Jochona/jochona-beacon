@@ -19,7 +19,7 @@
 # volume persistently so identity/authorization/enrollment state survives
 # container recreation.
 
-FROM rust:1.75-bookworm AS builder
+FROM rust:1.88-bookworm AS builder
 WORKDIR /build
 COPY Cargo.toml Cargo.lock* ./
 COPY src ./src

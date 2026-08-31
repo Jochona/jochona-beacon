@@ -176,6 +176,44 @@ pub async fn record_started(
     .await
 }
 
+/// Atomically transitions a non-expired `'started'` session to
+/// `'confirmed'` and returns it. This is the one-shot enforcement point:
+/// concurrent `/spake2/confirm` requests against the same `pairing_id`
+/// must never both reach `spake2_pairing::beacon_verify_confirm` — the
+/// contract promises exactly one *evaluated* confirmation attempt per
+/// window, not merely one *successful* one. Whichever caller wins this
+/// `UPDATE` proceeds to verify; every loser (concurrent racer, or a retry
+/// after the winner already finished) gets `Ok(None)` immediately, before
+/// ever touching the SPAKE2 verification path.
+pub async fn claim_for_confirmation(db: &Db, pairing_id: Uuid) -> Result<Option<PairingSession>> {
+    let id_str = pairing_id.to_string();
+    let now = time_fmt::format(OffsetDateTime::now_utc());
+    let raw: Option<RawPairingRow> = db
+        .call(move |conn| {
+            let tx = conn.unchecked_transaction()?;
+            let changed = tx.execute(
+                "UPDATE pairing_sessions SET phase = 'confirmed' \
+                 WHERE id = ?1 AND phase = 'started' AND expires_at > ?2",
+                params![id_str, now],
+            )?;
+            let raw = if changed == 1 {
+                tx.query_row(
+                    "SELECT * FROM pairing_sessions WHERE id = ?1",
+                    params![id_str],
+                    row_to_raw,
+                )
+                .optional()?
+            } else {
+                None
+            };
+            tx.commit()?;
+            Ok(raw)
+        })
+        .await
+        .context("claiming pairing session for confirmation")?;
+    raw.map(decode).transpose()
+}
+
 /// Terminal transition: pairing succeeded or failed. Either way the window
 /// is closed — a leaked or guessed short code gets exactly one attempt.
 pub async fn close(db: &Db, pairing_id: Uuid) -> Result<()> {
@@ -201,4 +239,69 @@ pub async fn sweep_expired(db: &Db) -> Result<u64> {
         Ok(n as u64)
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn claim_for_confirmation_lets_exactly_one_concurrent_caller_win() {
+        let db = Db::open_in_memory().unwrap();
+        let (session, _short_code) = open_window(&db, Uuid::new_v4()).await.unwrap();
+        let started = record_started(
+            &db,
+            session.id,
+            "jochona-client:deadbeef",
+            b"pa-placeholder",
+            b"y-placeholder",
+            b"pb-placeholder",
+        )
+        .await
+        .unwrap();
+        assert!(
+            started,
+            "record_started must win against a freshly-opened window"
+        );
+
+        // Ten concurrent confirm attempts against the same pairing_id, as
+        // an attacker sending several simultaneous guesses would. Exactly
+        // one may ever observe the session's persisted secrets.
+        let mut tasks = Vec::new();
+        for _ in 0..10 {
+            let db = db.clone();
+            let pairing_id = session.id;
+            tasks.push(tokio::spawn(async move {
+                claim_for_confirmation(&db, pairing_id).await
+            }));
+        }
+        let mut winners = 0;
+        for task in tasks {
+            if task.await.unwrap().unwrap().is_some() {
+                winners += 1;
+            }
+        }
+        assert_eq!(
+            winners, 1,
+            "exactly one concurrent /confirm attempt may be evaluated per pairing window"
+        );
+
+        // The window is consumed (phase moved off 'started'), so a later,
+        // fully-serial caller also cannot win a second claim.
+        assert!(claim_for_confirmation(&db, session.id)
+            .await
+            .unwrap()
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn claim_for_confirmation_rejects_a_session_still_in_open_phase() {
+        let db = Db::open_in_memory().unwrap();
+        let (session, _short_code) = open_window(&db, Uuid::new_v4()).await.unwrap();
+        // No `record_started` call — the window never left 'open'.
+        assert!(claim_for_confirmation(&db, session.id)
+            .await
+            .unwrap()
+            .is_none());
+    }
 }

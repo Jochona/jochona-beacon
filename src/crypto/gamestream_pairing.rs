@@ -159,6 +159,25 @@ pub struct HostPairingResult {
     pub host_cert_der: Vec<u8>,
 }
 
+/// Builds the Phase 1 (`getservercert`) request URI, including the
+/// `jochona_permission=observer_only` request described on `pair_with_host`.
+/// Pulled out of that function so the exact query string Beacon sends is
+/// directly assertable in a test without a live/mock GameStream server.
+fn getservercert_query(
+    beacon_unique_id: &str,
+    client_uuid: uuid::Uuid,
+    salt: &[u8; 16],
+    client_cert_pem: &[u8],
+) -> String {
+    format!(
+        "/pair?uniqueid={}&uuid={}&phrase=getservercert&salt={}&clientcert={}&jochona_permission=observer_only",
+        beacon_unique_id,
+        client_uuid,
+        hex::encode(salt),
+        hex::encode(client_cert_pem)
+    )
+}
+
 /// Runs the full four-phase pairing handshake against a Host discovered on
 /// `_nvstream._tcp` (plain-HTTP port, typically 47989). `pin` is the short
 /// numeric code the operator enters into the Host's own pairing prompt (a
@@ -176,13 +195,21 @@ pub async fn pair_with_host(
     rand::rngs::OsRng.fill_bytes(&mut salt);
     let key = derive_key(&salt, pin);
 
-    // Phase 1: getservercert
-    let query = format!(
-        "/pair?uniqueid={}&uuid={}&phrase=getservercert&salt={}&clientcert={}",
+    // Phase 1: getservercert. `jochona_permission=observer_only` asks a
+    // Jochona Host to restrict this pairing to observer-only access —
+    // Beacon never wants anything broader, that is its entire design
+    // (see SECURITY.md "Host enrollment"). Stock Sunshine/Apollo hosts
+    // ignore unrecognized query parameters, so this is a no-op there;
+    // Beacon's `broad_permission_warning` fallback in
+    // `crate::observer::permission` still applies to them. This is only
+    // ever a *request* — Beacon classifies a Host as observer-only solely
+    // from the `<jochona_permission>` tag actually observed in that
+    // Host's own `/serverinfo` response, never from having sent this.
+    let query = getservercert_query(
         beacon_unique_id,
         uuid::Uuid::new_v4(),
-        hex::encode(salt),
-        hex::encode(identity.cert_pem.as_bytes())
+        &salt,
+        identity.cert_pem.as_bytes(),
     );
     let resp = http_client::get_http(host_ip, http_port, &query)
         .await
@@ -306,4 +333,27 @@ fn pem_to_der(pem_str: &str) -> Result<Vec<u8>> {
         bail!("expected a CERTIFICATE PEM block, got {}", parsed.tag());
     }
     Ok(parsed.contents().to_vec())
+}
+
+#[cfg(test)]
+mod pairing_query_tests {
+    use super::*;
+
+    #[test]
+    fn getservercert_query_requests_observer_only_permission() {
+        let salt = [7u8; 16];
+        let query = getservercert_query(
+            "beacon-unique-id",
+            uuid::Uuid::nil(),
+            &salt,
+            b"-----BEGIN CERTIFICATE-----\nMA==\n-----END CERTIFICATE-----\n",
+        );
+        assert!(
+            query.contains("&jochona_permission=observer_only"),
+            "query must request observer-only permission: {query}"
+        );
+        assert!(query.starts_with(
+            "/pair?uniqueid=beacon-unique-id&uuid=00000000-0000-0000-0000-000000000000&phrase=getservercert&salt="
+        ));
+    }
 }

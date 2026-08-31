@@ -1,5 +1,5 @@
 //! `SPAKE2-P256-SHA256-HKDF-HMAC` (RFC 9382 §6, Table 1), locked with the
-//! Client team in `local://beacon-client-wire-contract.md`. Implemented
+//! Client team in `docs/protocols/client-v1.md`. Implemented
 //! directly against P-256 point arithmetic (not the `spake2` crate, which
 //! only ships an edwards25519 ciphersuite) so both this daemon and the
 //! Client's OpenSSL-3-based implementation compute byte-identical values —
@@ -439,7 +439,7 @@ mod tests {
     }
 
     /// Cross-checks the module against the byte-exact test vector published
-    /// in `local://beacon-client-wire-contract.md`, computed independently
+    /// in `docs/protocols/client-v1.md`, computed independently
     /// with pure-Python P-256 arithmetic. Uses fixed (non-random) `x`/`y`
     /// scalars, which only `beacon_round1`'s *internals* would normally
     /// randomize — so this test recomputes round 1 manually rather than

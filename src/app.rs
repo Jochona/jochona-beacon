@@ -51,7 +51,11 @@ pub struct AppState {
     pub gamestream_identity: Arc<GameStreamIdentity>,
     pub tls_acceptor: api::serve::SharedAcceptor,
     pub advertiser: Arc<RwLock<Option<BeaconAdvertiser>>>,
-    pub event_tx: broadcast::Sender<serde_json::Value>,
+    /// `(beacon_events.id, envelope_json)` — the row id lets
+    /// `api::routes::events::stream_events` deduplicate against its
+    /// backlog replay and catch up from the durable log after a lag,
+    /// instead of silently dropping events.
+    pub event_tx: broadcast::Sender<(i64, serde_json::Value)>,
     pub config: Arc<Config>,
 }
 
@@ -64,7 +68,7 @@ impl AppState {
     pub async fn emit_event(&self, event: BeaconEvent) -> Result<i64> {
         let at = time::OffsetDateTime::now_utc();
         let rowid = events_repo::append(&self.db, &event, at).await?;
-        let _ = self.event_tx.send(event.to_envelope_json(at));
+        let _ = self.event_tx.send((rowid, event.to_envelope_json(at)));
         Ok(rowid)
     }
 
@@ -188,6 +192,7 @@ pub async fn run(config: Config) -> Result<()> {
     );
 
     let mut api_task = tokio::spawn(api::serve::run(api_router, api_listener, tls_acceptor));
+    tokio::spawn(api::wake_scheduler::resume_incomplete_wakes(state.clone()));
     let pairing_sweep_task = tokio::spawn(pairing_sweep_loop(state.clone()));
     let retention_task = tokio::spawn(retention_loop(state.clone()));
     let observer_task = tokio::spawn(observer::gamestream::run_poll_loop(state.clone()));
@@ -249,4 +254,41 @@ async fn retention_loop(state: AppState) {
             tracing::warn!(error = %err, "observation retention prune failed");
         }
     }
+}
+
+/// Builds a fully-real `AppState` (real identities, real TLS config, no
+/// live listeners/mDNS) against an already-open `Db`, for tests outside
+/// `app.rs` that need a genuine `AppState` rather than hand-rolling one
+/// (e.g. `crate::api::wake_scheduler`'s recovery tests).
+#[cfg(test)]
+pub(crate) async fn test_app_state(db: Db) -> Result<AppState> {
+    let master_key = MasterKey([9u8; 32]);
+    let identity = identity_repo::load_or_create(&db, master_key.clone()).await?;
+    let gamestream_identity =
+        gamestream_identity_repo::load_or_create(&db, master_key.clone()).await?;
+    let server_config = tls::inbound::server_config(&identity)?;
+    let tls_acceptor: api::serve::SharedAcceptor = Arc::new(RwLock::new(
+        tokio_rustls::TlsAcceptor::from(Arc::new(server_config)),
+    ));
+    let (event_tx, _rx) = broadcast::channel(64);
+    Ok(AppState {
+        db,
+        master_key,
+        identity: Arc::new(RwLock::new(identity)),
+        gamestream_identity: Arc::new(gamestream_identity),
+        tls_acceptor,
+        advertiser: Arc::new(RwLock::new(None)),
+        event_tx,
+        config: Arc::new(Config {
+            data_dir: PathBuf::from("/tmp/jochona-beacon-test"),
+            bind: "127.0.0.1:0".parse().unwrap(),
+            admin_bind: "127.0.0.1:0".parse().unwrap(),
+            hostname: "test-beacon".to_string(),
+            observer_poll_interval: Duration::from_secs(30),
+            pairing_sweep_interval: Duration::from_secs(10),
+            retention_sweep_interval: Duration::from_secs(3600),
+            event_retention: time::Duration::days(30),
+            observation_retention: time::Duration::days(30),
+        }),
+    })
 }

@@ -93,14 +93,26 @@ pub async fn wake_host(
         return Err(ApiError::from(err));
     }
 
-    state
-        .emit_event(BeaconEvent::WakeAccepted { wake_id, host_id })
-        .await?;
-
+    // Scheduling the burst must never be at the mercy of the audit-log
+    // write/broadcast below: once `insert_accepted` above durably records
+    // this wake as accepted, any replay of this idempotency key returns
+    // 202 without ever re-entering this handler (see the block above).
+    // If `emit_event` failed here before the burst was scheduled, the
+    // wake would be durably "accepted" but the packets would never be
+    // sent, and no retry could ever fix it. Spawn first; the audit event
+    // is best-effort and never undoes an acceptance already promised to
+    // the client.
     let scheduler_state = state.clone();
     tokio::spawn(async move {
         wake_scheduler::run_burst(scheduler_state, wake_id, host).await;
     });
+
+    if let Err(err) = state
+        .emit_event(BeaconEvent::WakeAccepted { wake_id, host_id })
+        .await
+    {
+        tracing::warn!(error = %err, %wake_id, "failed to record wake.accepted audit event");
+    }
 
     Ok(accepted_response(&event))
 }

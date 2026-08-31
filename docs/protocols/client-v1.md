@@ -10,7 +10,7 @@ Authoritative for `Jochona/jochona-beacon` and the Client's Beacon integration. 
 - The default API port is `47100`. A Client must use `47100` when a manual Beacon URL omits its port.
 - Discovery of `host:port` + fingerprint, in priority order: (a) QR payload from an open pairing window, (b) manual admin-page entry, (c) mDNS `_jochona-beacon._tcp.local.` TXT records (`id=<beacon_id>`, `fp=<sha256 hex>`, `v=1`). Any of these is only a **TOFU hint** — the value that gets durably pinned by the Client is the fingerprint of the cert actually observed on the TLS connection where SPAKE2 confirmation (§2) succeeds, never the out-of-band hint blindly.
 - Every subsequent connection: Client's verify callback DER-encodes the presented leaf's complete `X509_PUBKEY`, hashes it with SHA-256, and compares it to the persisted pin. Reject the handshake on any mismatch. **Never** fall back to unpinned/any-cert mode.
-- Identity-change hard-block: if the pin ever mismatches, Client must surface "Beacon identity changed — re-pair required" and refuse to connect; it must not auto-trust a new fingerprint. Symmetrically, Beacon invalidates every authorized client whose `authorized_since_beacon_identity_id` doesn't match Beacon's current identity row.
+- Identity-change hard-block: if the pin ever mismatches, Client must surface "Beacon identity changed — re-pair required" and refuse to connect; it must not auto-trust a new fingerprint. Symmetrically, Beacon invalidates every authorized client whose `authorized_since_beacon_identity` doesn't match Beacon's current identity row.
 
 ## 2. Pairing ciphersuite: `SPAKE2-P256-SHA256-HKDF-HMAC` (RFC 9382 §6, Table 1)
 

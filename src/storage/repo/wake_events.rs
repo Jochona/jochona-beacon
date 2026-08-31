@@ -92,6 +92,26 @@ pub async fn get(db: &Db, wake_id: Uuid) -> Result<Option<WakeEvent>> {
     raw.map(decode).transpose()
 }
 
+/// Every wake with no `failed_at` yet — the candidate set for startup
+/// recovery (`crate::api::wake_scheduler::resume_incomplete_wakes`).
+/// Includes wakes that already finished their full burst schedule
+/// (harmless: the caller re-checks `sent_at.len()` before resuming
+/// anything), since that is cheaper than duplicating the "was this
+/// schedule already complete" logic in SQL against the JSON column.
+pub async fn list_incomplete(db: &Db) -> Result<Vec<WakeEvent>> {
+    let raws: Vec<RawWakeRow> = db
+        .call(move |conn| {
+            let mut stmt = conn.prepare("SELECT * FROM wake_events WHERE failed_at IS NULL")?;
+            let rows = stmt
+                .query_map([], row_to_raw)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .context("reading wake_events")?;
+            Ok(rows)
+        })
+        .await?;
+    raws.into_iter().map(decode).collect()
+}
+
 pub async fn insert_accepted(db: &Db, event: &WakeEvent) -> Result<()> {
     let id = event.id.to_string();
     let host_id = event.host_id.to_string();

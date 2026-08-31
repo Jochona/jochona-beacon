@@ -1,6 +1,6 @@
 //! `GET /pairing`, `POST /pairing/:id/spake2/start`, `POST
 //! /pairing/:id/spake2/confirm` — reachable during the 60s pairing window
-//! without prior authorization (see `local://beacon-client-wire-contract.md`
+//! without prior authorization (see `docs/protocols/client-v1.md`
 //! §3). Every crypto step is delegated to `crate::crypto::spake2_pairing`;
 //! this module only wires HTTP <-> that module <-> `crate::storage::repo`.
 
@@ -160,14 +160,14 @@ pub async fn spake2_confirm(
         }
     };
 
-    let Some(session) = pairings_repo::get(&state.db, pairing_id).await? else {
+    // Atomically claims the session before any verification runs: two
+    // concurrent `/confirm` requests for the same `pairing_id` must never
+    // both reach `beacon_verify_confirm` below, or the one-shot guarantee
+    // (exactly one evaluated guess per window) would be defeated by
+    // sending several guesses at once instead of serially.
+    let Some(session) = pairings_repo::claim_for_confirmation(&state.db, pairing_id).await? else {
         return Err(ApiError::Gone("pairing_window_expired"));
     };
-    let now = OffsetDateTime::now_utc();
-    if session.is_expired(now) || session.phase != PairingPhase::Started {
-        pairings_repo::close(&state.db, pairing_id).await?;
-        return Err(ApiError::Gone("pairing_window_expired"));
-    }
 
     let identity = state.identity.read().await;
     let beacon_id = identity.beacon_id;

@@ -79,11 +79,20 @@ A pairing window is one-shot: any failed confirmation attempt — wrong
 code, tampered transcript, replayed/relayed connection — immediately
 closes the entire window rather than allowing further guesses.
 
-## Host enrollment: observer-only by construction, never broad control
+## Host enrollment: observer-only requested and verified, never broad control
 
 Beacon enrolls a Host via the standard GameStream/Moonlight pairing
 handshake (`src/crypto/gamestream_pairing.rs`), pinning the Host's
-certificate for every future request. After enrollment, Beacon only ever:
+certificate for every future request. The `getservercert` phase of that
+handshake carries `jochona_permission=observer_only`: a Jochona Host
+honors it by granting only observer-level access to the resulting
+certificate; a stock Sunshine/Apollo Host has no concept of this
+parameter and simply ignores it, so pairing proceeds unchanged. Either
+way, this is only ever a *request* — Beacon classifies a Host as
+observer-only solely from the `<jochona_permission>` tag actually
+observed in that Host's own live `/serverinfo` response
+(`src/observer/permission.rs`), never from having merely sent the
+request. After enrollment, Beacon only ever:
 
 - performs a periodic, pinned, authenticated `GET /serverinfo` poll
   (`src/observer/gamestream.rs`) — the sole source of Host online/offline

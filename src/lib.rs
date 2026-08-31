@@ -1,6 +1,6 @@
 //! Jochona Beacon: a hardened Linux LAN daemon that pairs with the
 //! Jochona Client over a locked mTLS + SPAKE2 wire contract
-//! (`local://beacon-client-wire-contract.md`) and wakes registered
+//! (`docs/protocols/client-v1.md`) and wakes registered
 //! Jochona/Sunshine/Apollo Hosts over Wake-on-LAN.
 
 pub mod admin;

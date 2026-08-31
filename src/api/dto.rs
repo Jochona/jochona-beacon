@@ -1,5 +1,5 @@
 //! Wire shapes for `/jochona/beacon/v1/*`, matching
-//! `local://beacon-client-wire-contract.md` §3 field-for-field. Kept
+//! `docs/protocols/client-v1.md` §3 field-for-field. Kept
 //! separate from `crate::domain` deliberately: domain types are Beacon's
 //! internal vocabulary, these are the locked JSON contract with the
 //! Client — the two are allowed to diverge (e.g. the `"sha256:"`-prefixed

@@ -2,7 +2,7 @@
 name = "jochona-beacon"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.88"
 description = "Jochona Beacon: a hardened Linux LAN daemon that pairs with the Jochona Client and wakes registered Jochona/Sunshine/Apollo Hosts."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Jochona/jochona-beacon"

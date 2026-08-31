@@ -68,7 +68,7 @@ Beacon ──── pinned HTTPS GET /serverinfo (observer) ───►  Host
 cargo build --release
 ```
 
-Requires Rust 1.75+. No system dependencies: SQLite is vendored
+Requires Rust 1.88+. No system dependencies: SQLite is vendored
 (`rusqlite`'s `bundled` feature) and TLS is pure-Rust (`rustls`/`ring`).
 
 ## Running
@@ -135,12 +135,16 @@ and lets you pair manually with a Host's own pairing PIN. Enrollment:
 
 1. learns the Host's MAC only via a trusted physical-LAN ARP/route entry
    (never accepted as free-form input — see `src/transport/route.rs`);
-2. runs the standard GameStream/Moonlight pairing handshake, pinning the
-   Host's certificate for every future `/serverinfo` poll;
-3. classifies the Host's family and the permission it granted (Jochona
-   Hosts grant observer-only by construction; Sunshine/Apollo Hosts are
-   always flagged with a broad-permission warning, since neither has a
-   narrower grant to offer).
+2. runs the standard GameStream/Moonlight pairing handshake, requesting
+   observer-only permission (`jochona_permission=observer_only` on the
+   `getservercert` phase — a Jochona Host honors it, a stock
+   Sunshine/Apollo Host simply ignores the unrecognized parameter) and
+   pinning the Host's certificate for every future `/serverinfo` poll;
+3. classifies the Host's family and the permission it actually granted,
+   from the live `/serverinfo` response — never from having merely sent
+   the request (Jochona Hosts that honor it report observer-only there;
+   Sunshine/Apollo Hosts are always flagged with a broad-permission
+   warning, since neither has a narrower grant to offer).
 
 Beacon never stores the enrollment PIN or any other Host operator
 credential — it exists only transiently, in memory, for the duration of
