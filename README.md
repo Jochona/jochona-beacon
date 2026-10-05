@@ -10,6 +10,11 @@ A hardened, Linux-only LAN daemon that:
   authenticated `/serverinfo` poll — never by launching, stopping, or
   otherwise controlling them.
 
+Beacon is optional: a paired Host and Client stream directly over the
+LAN without it. Add Beacon only when something between them (a mesh
+VPN overlay, a different subnet) can't carry the Wake-on-LAN broadcast
+or you want LAN presence reporting independent of the stream itself.
+
 The byte-for-byte Client contract is locked in
 [`docs/protocols/client-v1.md`](docs/protocols/client-v1.md).
 
@@ -70,6 +75,9 @@ cargo build --release
 
 Requires Rust 1.88+. No system dependencies: SQLite is vendored
 (`rusqlite`'s `bundled` feature) and TLS is pure-Rust (`rustls`/`ring`).
+
+This repository has no CI workflow yet; build and run the test suite
+locally with `cargo build` / `cargo test`.
 
 ## Running
 
