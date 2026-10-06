@@ -91,6 +91,11 @@ fn harden_file_permissions(path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(unix))]
+fn harden_file_permissions(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
 #[cfg(unix)]
 fn append_suffix(path: &Path, suffix: &str) -> std::path::PathBuf {
     let mut s = path.as_os_str().to_owned();
