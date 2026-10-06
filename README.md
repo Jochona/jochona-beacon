@@ -18,6 +18,11 @@ or you want LAN presence reporting independent of the stream itself.
 The byte-for-byte Client contract is locked in
 [`docs/protocols/client-v1.md`](docs/protocols/client-v1.md).
 
+For an end-to-end walkthrough pairing a Windows Host with a Bazzite
+Client (Beacon included), see [Getting started: Windows Host + Bazzite
+Client](https://github.com/Jochona/jochona-constellation#getting-started-windows-host--bazzite-client)
+in the constellation repo.
+
 ## Architecture
 
 ```
@@ -79,10 +84,13 @@ Requires Rust 1.88+. No system dependencies: SQLite is vendored
 Every push and pull request runs `cargo fmt --check`, `cargo clippy
 --all-targets --all-features -- -D warnings`, `cargo test --locked`, and
 `cargo build --release --locked` (see `.github/workflows/ci.yml`).
-Tagged `v*` pushes build release binaries for Linux (x86_64, aarch64),
-Windows, and macOS, publish a `ghcr.io/jochona/jochona-beacon` image,
-and attach everything to a GitHub Release
-(`.github/workflows/release.yml`).
+Tagged `v*` pushes build release binaries for Linux (x86_64, aarch64 via
+`cross`), Windows (x86_64), and macOS (aarch64); publish a
+`ghcr.io/jochona/jochona-beacon` Docker image (tagged with the version
+and `latest`); and attach every archive plus a `SHA256SUMS` checksum
+file to an auto-generated GitHub Release
+(`.github/workflows/release.yml`). Binaries are unsigned — verify
+against `SHA256SUMS`.
 
 ## Running
 
@@ -176,4 +184,5 @@ ChaCha20-Poly1305 under that master key before it ever touches disk; see
 ## License
 
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE),
-at your option. Third-party notices: [`NOTICE`](NOTICE).
+at your option. Third-party notices: [`NOTICE`](NOTICE). Release
+history: [`CHANGELOG.md`](CHANGELOG.md).
