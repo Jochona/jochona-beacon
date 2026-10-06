@@ -192,8 +192,7 @@ pub fn discover_hosts(candidates_html: &str) -> String {
 <label>SecureOn password (optional, 12 hex chars — only if the Host NIC requires one)<input type="text" name="secure_on_hex" pattern="[0-9a-fA-F]{{12}}" placeholder="AABBCCDDEEFF"></label>
 <p><button type="submit">Pair &amp; enroll</button></p>
 </form>
-"#,
-        candidates_html = candidates_html,
+"#
     )
 }
 

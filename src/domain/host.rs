@@ -106,7 +106,7 @@ impl Host {
     pub fn mac_colon_hex(&self) -> String {
         self.mac_address
             .iter()
-            .map(|b| format!("{:02x}", b))
+            .map(|b| format!("{b:02x}"))
             .collect::<Vec<_>>()
             .join(":")
     }
