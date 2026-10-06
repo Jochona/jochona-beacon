@@ -1,0 +1,28 @@
+name: _cleanup-test-ghcr-tag
+
+on:
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  delete-test-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: delete 0.0.0-ci-test container version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ids=$(gh api -H "Accept: application/vnd.github+json" \
+            /orgs/jochona/packages/container/jochona-beacon/versions \
+            --jq '.[] | select(.metadata.container.tags[]? == "0.0.0-ci-test") | .id')
+          if [ -z "$ids" ]; then
+            echo "no matching version found"
+            exit 0
+          fi
+          for id in $ids; do
+            echo "deleting version $id"
+            gh api -X DELETE "/orgs/jochona/packages/container/jochona-beacon/versions/$id"
+          done
