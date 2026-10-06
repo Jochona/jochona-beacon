@@ -76,8 +76,13 @@ cargo build --release
 Requires Rust 1.88+. No system dependencies: SQLite is vendored
 (`rusqlite`'s `bundled` feature) and TLS is pure-Rust (`rustls`/`ring`).
 
-This repository has no CI workflow yet; build and run the test suite
-locally with `cargo build` / `cargo test`.
+Every push and pull request runs `cargo fmt --check`, `cargo clippy
+--all-targets --all-features -- -D warnings`, `cargo test --locked`, and
+`cargo build --release --locked` (see `.github/workflows/ci.yml`).
+Tagged `v*` pushes build release binaries for Linux (x86_64, aarch64),
+Windows, and macOS, publish a `ghcr.io/jochona/jochona-beacon` image,
+and attach everything to a GitHub Release
+(`.github/workflows/release.yml`).
 
 ## Running
 
