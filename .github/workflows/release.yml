@@ -1,0 +1,181 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux-x86_64:
+    name: build (linux x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        with:
+          toolchain: 1.88
+          targets: x86_64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo build --release --locked --target x86_64-unknown-linux-gnu
+      - name: package
+        run: |
+          set -euo pipefail
+          triple=x86_64-unknown-linux-gnu
+          version=${GITHUB_REF_NAME#v}
+          stage="jochona-beacon-${triple}-v${version}"
+          mkdir "$stage"
+          cp "target/${triple}/release/jochona-beacon" "$stage/"
+          cp packaging/systemd/jochona-beacon.service "$stage/"
+          cp README.md LICENSE-APACHE LICENSE-MIT NOTICE "$stage/"
+          tar czf "${stage}.tar.gz" "$stage"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jochona-beacon-x86_64-unknown-linux-gnu
+          path: jochona-beacon-*.tar.gz
+
+  build-linux-aarch64:
+    name: build (linux aarch64, via cross)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        with:
+          toolchain: 1.88
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cross
+      - run: cross build --release --locked --target aarch64-unknown-linux-gnu
+      - name: package
+        run: |
+          set -euo pipefail
+          triple=aarch64-unknown-linux-gnu
+          version=${GITHUB_REF_NAME#v}
+          stage="jochona-beacon-${triple}-v${version}"
+          mkdir "$stage"
+          cp "target/${triple}/release/jochona-beacon" "$stage/"
+          cp packaging/systemd/jochona-beacon.service "$stage/"
+          cp README.md LICENSE-APACHE LICENSE-MIT NOTICE "$stage/"
+          tar czf "${stage}.tar.gz" "$stage"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jochona-beacon-aarch64-unknown-linux-gnu
+          path: jochona-beacon-*.tar.gz
+
+  build-windows-x86_64:
+    name: build (windows x86_64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        with:
+          toolchain: 1.88
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo build --release --locked --target x86_64-pc-windows-msvc
+      - name: package
+        shell: pwsh
+        run: |
+          $triple = "x86_64-pc-windows-msvc"
+          $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
+          $stage = "jochona-beacon-$triple-v$version"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item "target/$triple/release/jochona-beacon.exe" "$stage/"
+          Copy-Item README.md,LICENSE-APACHE,LICENSE-MIT,NOTICE "$stage/"
+          Compress-Archive -Path $stage -DestinationPath "$stage.zip"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jochona-beacon-x86_64-pc-windows-msvc
+          path: jochona-beacon-*.zip
+
+  build-macos:
+    name: build (macos aarch64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        with:
+          toolchain: 1.88
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo build --release --locked --target aarch64-apple-darwin
+      - name: package
+        run: |
+          set -euo pipefail
+          triple=aarch64-apple-darwin
+          version=${GITHUB_REF_NAME#v}
+          stage="jochona-beacon-${triple}-v${version}"
+          mkdir "$stage"
+          cp "target/${triple}/release/jochona-beacon" "$stage/"
+          cp README.md LICENSE-APACHE LICENSE-MIT NOTICE "$stage/"
+          tar czf "${stage}.tar.gz" "$stage"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jochona-beacon-aarch64-apple-darwin
+          path: jochona-beacon-*.tar.gz
+
+  docker-publish:
+    name: publish GHCR image
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        id: meta
+        with:
+          images: ghcr.io/jochona/jochona-beacon
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  publish:
+    name: create GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - build-linux-x86_64
+      - build-linux-aarch64
+      - build-windows-x86_64
+      - build-macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+      - name: checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum * > SHA256SUMS
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true
